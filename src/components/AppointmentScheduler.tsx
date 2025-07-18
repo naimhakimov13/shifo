@@ -99,26 +99,6 @@ export function AppointmentScheduler({
     }
   };
 
-  const getAppointmentsByTime = () => {
-    const timeSlots: { [key: string]: Appointment[] } = {};
-    
-    todayAppointments.forEach(apt => {
-      if (!timeSlots[apt.time]) {
-        timeSlots[apt.time] = [];
-      }
-      timeSlots[apt.time].push(apt);
-    });
-
-    return timeSlots;
-  };
-
-  const appointmentsByTime = getAppointmentsByTime();
-  const timeSlots = Array.from({ length: 18 }, (_, i) => {
-    const hour = Math.floor(i / 2) + 8;
-    const minute = (i % 2) * 30;
-    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  });
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
