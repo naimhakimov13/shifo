@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Plus, Search, Filter, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, Plus, Search, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Appointment, Patient, Doctor } from '../types';
-import { SmartScheduler } from '../utils/scheduler';
+import { Modal } from './Modal';
+import { AppointmentForm } from './AppointmentForm';
 
 interface AppointmentSchedulerProps {
   appointments: Appointment[];
@@ -20,26 +21,11 @@ export function AppointmentScheduler({
   onUpdateAppointment,
   onDeleteAppointment
 }: AppointmentSchedulerProps) {
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedDoctor, setSelectedDoctor] = useState('');
-  const [suggestedSlots, setSuggestedSlots] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [formData, setFormData] = useState({
-    patientId: '',
-    doctorId: '',
-    date: '',
-    time: '',
-    duration: 30,
-    type: 'consultation' as const,
-    status: 'scheduled' as const,
-    notes: '',
-    symptoms: '',
-    diagnosis: '',
-    prescription: ''
-  });
 
   const todayAppointments = appointments.filter(apt => apt.date === selectedDate);
 
@@ -59,89 +45,29 @@ export function AppointmentScheduler({
     return matchesSearch && matchesStatus;
   });
 
-  const handleDoctorChange = (doctorId: string) => {
-    setSelectedDoctor(doctorId);
-    setFormData({ ...formData, doctorId });
-    
-    if (doctorId && (formData.date || selectedDate)) {
-      const doctor = doctors.find(d => d.id === doctorId);
-      const dateToUse = formData.date || selectedDate;
-      if (doctor) {
-        const slots = SmartScheduler.findBestSlots(
-          doctor,
-          dateToUse,
-          formData.duration,
-          appointments.filter(apt => apt.id !== editingAppointment?.id) // Исключаем редактируемую запись
-        );
-        setSuggestedSlots(slots);
-      }
-    }
+  const handleAddAppointment = () => {
+    setEditingAppointment(null);
+    setShowModal(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleFormSubmit = (appointmentData: Omit<Appointment, 'id' | 'createdAt'>) => {
     if (editingAppointment) {
-      onUpdateAppointment(editingAppointment.id, formData);
+      onUpdateAppointment(editingAppointment.id, appointmentData);
       setEditingAppointment(null);
     } else {
-      onAddAppointment(formData);
-      setShowAddForm(false);
+      onAddAppointment(appointmentData);
     }
-    
-    resetForm();
+    setShowModal(false);
   };
 
   const handleEdit = (appointment: Appointment) => {
     setEditingAppointment(appointment);
-    setFormData({
-      patientId: appointment.patientId,
-      doctorId: appointment.doctorId,
-      date: appointment.date,
-      time: appointment.time,
-      duration: appointment.duration,
-      type: appointment.type,
-      status: appointment.status,
-      notes: appointment.notes,
-      symptoms: appointment.symptoms,
-      diagnosis: appointment.diagnosis || '',
-      prescription: appointment.prescription || ''
-    });
-    
-    // Обновляем предложенные слоты для редактируемой записи
-    const doctor = doctors.find(d => d.id === appointment.doctorId);
-    if (doctor) {
-      const slots = SmartScheduler.findBestSlots(
-        doctor,
-        appointment.date,
-        appointment.duration,
-        appointments.filter(apt => apt.id !== appointment.id)
-      );
-      setSuggestedSlots(slots);
-    }
+    setShowModal(true);
   };
 
   const handleCancel = () => {
-    setShowAddForm(false);
+    setShowModal(false);
     setEditingAppointment(null);
-    resetForm();
-  };
-
-  const resetForm = () => {
-    setFormData({
-      patientId: '',
-      doctorId: '',
-      date: '',
-      time: '',
-      duration: 30,
-      type: 'consultation',
-      status: 'scheduled',
-      notes: '',
-      symptoms: '',
-      diagnosis: '',
-      prescription: ''
-    });
-    setSuggestedSlots([]);
   };
 
   const handleStatusChange = (appointmentId: string, newStatus: string) => {
@@ -193,7 +119,7 @@ export function AppointmentScheduler({
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Планировщик записей</h1>
         <button
-          onClick={() => setShowAddForm(true)}
+          onClick={handleAddAppointment}
           className="bg-sky-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-sky-600 transition-colors"
         >
           <Plus size={20} />
@@ -228,200 +154,22 @@ export function AppointmentScheduler({
         </div>
       </div>
 
-      {/* Форма добавления/редактирования */}
-      {(showAddForm || editingAppointment) && (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-xl font-semibold mb-4">
-            {editingAppointment ? 'Редактировать запись' : 'Создать новую запись'}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Пациент</label>
-                <select
-                  required
-                  value={formData.patientId}
-                  onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="">Выберите пациента</option>
-                  {patients.map(patient => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.firstName} {patient.lastName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Врач</label>
-                <select
-                  required
-                  value={formData.doctorId}
-                  onChange={(e) => handleDoctorChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="">Выберите врача</option>
-                  {doctors.map(doctor => (
-                    <option key={doctor.id} value={doctor.id}>
-                      {doctor.firstName} {doctor.lastName} - {doctor.specialization}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Дата</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Время</label>
-                <input
-                  type="time"
-                  required
-                  value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Тип приема</label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="consultation">Консультация</option>
-                  <option value="follow-up">Повторный прием</option>
-                  <option value="procedure">Процедура</option>
-                  <option value="emergency">Экстренный прием</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="scheduled">Запланировано</option>
-                  <option value="completed">Завершено</option>
-                  <option value="cancelled">Отменено</option>
-                  <option value="no-show">Неявка</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Длительность (мин)</label>
-                <select
-                  value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value={15}>15 минут</option>
-                  <option value={30}>30 минут</option>
-                  <option value={45}>45 минут</option>
-                  <option value={60}>60 минут</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Предложенные временные слоты */}
-            {suggestedSlots.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Рекомендуемое время:
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedSlots.map((slot, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, time: slot.time })}
-                      className="px-3 py-1 bg-green-100 text-green-800 rounded-lg text-sm hover:bg-green-200 transition-colors"
-                    >
-                      {slot.time}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Симптомы</label>
-              <textarea
-                value={formData.symptoms}
-                onChange={(e) => setFormData({ ...formData, symptoms: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                placeholder="Опишите симптомы пациента..."
-              />
-            </div>
-
-            {editingAppointment && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Диагноз</label>
-                  <textarea
-                    value={formData.diagnosis}
-                    onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                    placeholder="Поставленный диагноз..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Назначения</label>
-                  <textarea
-                    value={formData.prescription}
-                    onChange={(e) => setFormData({ ...formData, prescription: e.target.value })}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                    placeholder="Назначенные препараты и процедуры..."
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Заметки</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                placeholder="Дополнительные заметки..."
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                type="submit"
-                className="bg-sky-500 text-white px-6 py-2 rounded-lg hover:bg-sky-600 transition-colors"
-              >
-                {editingAppointment ? 'Сохранить изменения' : 'Создать запись'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Отмена
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Модальное окно для создания/редактирования записи */}
+      <Modal
+        isOpen={showModal}
+        onClose={handleCancel}
+        title={editingAppointment ? 'Редактировать запись' : 'Создать новую запись'}
+        size="xl"
+      >
+        <AppointmentForm
+          appointment={editingAppointment}
+          patients={patients}
+          doctors={doctors}
+          appointments={appointments}
+          onSubmit={handleFormSubmit}
+          onCancel={handleCancel}
+        />
+      </Modal>
 
       {/* Список всех записей */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
