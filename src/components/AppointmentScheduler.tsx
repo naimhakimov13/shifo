@@ -186,7 +186,7 @@ export function AppointmentScheduler({
 
       {/* Основной контент */}
       {viewMode === 'calendar' ? (
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 h-[calc(100vh-200px)]">
           <CalendarView
             appointments={appointments}
             patients={patients}
