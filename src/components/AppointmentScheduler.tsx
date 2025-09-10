@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Grid, List } from 'lucide-react';
+import { Calendar, Clock, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Grid, List, Copy } from 'lucide-react';
 import { Appointment, Patient, Doctor } from '../types';
 import { Modal } from './Modal';
 import { AppointmentForm } from './AppointmentForm';
 import { CalendarView } from './CalendarView';
+import { AppointmentDuplicationModal } from './AppointmentDuplicationModal';
 
 interface AppointmentSchedulerProps {
   appointments: Appointment[];
@@ -27,6 +28,8 @@ export function AppointmentScheduler({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [selectedAppointments, setSelectedAppointments] = useState<string[]>([]);
+  const [showDuplicationModal, setShowDuplicationModal] = useState(false);
 
   const handleTimeSlotClick = (date: string, time: string) => {
     setEditingAppointment(null);
@@ -79,6 +82,40 @@ export function AppointmentScheduler({
     onUpdateAppointment(appointmentId, { status: newStatus as any });
   };
 
+  const handleSelectAppointment = (appointmentId: string, selected: boolean) => {
+    if (selected) {
+      setSelectedAppointments([...selectedAppointments, appointmentId]);
+    } else {
+      setSelectedAppointments(selectedAppointments.filter(id => id !== appointmentId));
+    }
+  };
+
+  const handleSelectAll = (selected: boolean) => {
+    if (selected) {
+      setSelectedAppointments(filteredAppointments.map(apt => apt.id));
+    } else {
+      setSelectedAppointments([]);
+    }
+  };
+
+  const handleDuplicateSelected = () => {
+    if (selectedAppointments.length > 0) {
+      setShowDuplicationModal(true);
+    }
+  };
+
+  const handleDuplicationComplete = (duplicates: Omit<Appointment, 'id' | 'createdAt'>[]) => {
+    duplicates.forEach(duplicate => {
+      onAddAppointment(duplicate);
+    });
+    setSelectedAppointments([]);
+    setShowDuplicationModal(false);
+  };
+
+  const getSelectedAppointments = () => {
+    return appointments.filter(apt => selectedAppointments.includes(apt.id));
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-green-100 text-green-800 border-green-200';
@@ -128,6 +165,16 @@ export function AppointmentScheduler({
               <span>Список</span>
             </button>
           </div>
+          {viewMode === 'list' && (
+            <button
+              onClick={handleDuplicateSelected}
+              disabled={selectedAppointments.length === 0}
+              className="bg-emerald-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Copy size={20} />
+              <span>Дублировать ({selectedAppointments.length})</span>
+            </button>
+          )}
           <button
             onClick={handleAddAppointment}
             className="bg-sky-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-sky-600 transition-colors"
@@ -184,6 +231,18 @@ export function AppointmentScheduler({
         />
       </Modal>
 
+      {/* Модальное окно дублирования */}
+      <AppointmentDuplicationModal
+        isOpen={showDuplicationModal}
+        onClose={() => setShowDuplicationModal(false)}
+        appointments={appointments}
+        selectedAppointments={getSelectedAppointments()}
+        patients={patients}
+        doctors={doctors}
+        existingAppointments={appointments}
+        onDuplicate={handleDuplicationComplete}
+      />
+
       {/* Основной контент */}
       {viewMode === 'calendar' ? (
         <div className="flex-1 min-h-0">
@@ -205,6 +264,14 @@ export function AppointmentScheduler({
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedAppointments.length === filteredAppointments.length && filteredAppointments.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                      />
+                    </th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Пациент</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Врач</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Дата и время</th>
@@ -220,6 +287,14 @@ export function AppointmentScheduler({
                     
                     return (
                       <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="py-4 px-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedAppointments.includes(appointment.id)}
+                            onChange={(e) => handleSelectAppointment(appointment.id, e.target.checked)}
+                            className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                          />
+                        </td>
                         <td className="py-4 px-4">
                           <div>
                             <p className="font-medium text-gray-900">

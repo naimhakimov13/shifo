@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, User, UserCheck, FileText, AlertCircle } from 'lucide-react';
 import { Appointment, Patient, Doctor } from '../types';
 import { SmartScheduler } from '../utils/scheduler';
+import { RecurringAppointmentOption } from './RecurringAppointmentOption';
+import { AppointmentDuplicator } from '../utils/appointmentDuplicator';
 
 interface AppointmentFormProps {
   appointment?: Appointment | null;
@@ -36,6 +38,17 @@ export function AppointmentForm({
 
   const [suggestedSlots, setSuggestedSlots] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
+  const [recurringOptions, setRecurringOptions] = useState<{
+    enabled: boolean;
+    interval: 'week' | 'month';
+    count: number;
+    skipWeekends: boolean;
+  }>({
+    enabled: false,
+    interval: 'week',
+    count: 4,
+    skipWeekends: true
+  });
 
   useEffect(() => {
     if (appointment) {
@@ -119,7 +132,33 @@ export function AppointmentForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    if (recurringOptions.enabled && !isEditing) {
+      // Создаем повторяющиеся записи
+      const recurringAppointments = AppointmentDuplicator.createRecurringAppointments(
+        formData,
+        {
+          interval: recurringOptions.interval,
+          count: recurringOptions.count,
+          skipWeekends: recurringOptions.skipWeekends,
+          skipConflicts: true
+        }
+      );
+      
+      // Отправляем все записи
+      recurringAppointments.forEach(appointment => {
+        onSubmit(appointment);
+      });
+    } else {
+      onSubmit(formData);
+    }
+  };
+
+  const handleRecurringChange = (enabled: boolean, options: any) => {
+    setRecurringOptions({
+      enabled,
+      ...options
+    });
   };
 
   const isEditing = !!appointment;
@@ -331,6 +370,11 @@ export function AppointmentForm({
         </div>
       </div>
 
+      {/* Опция повторяющихся записей - только при создании новой записи */}
+      {!isEditing && (
+        <RecurringAppointmentOption onRecurringChange={handleRecurringChange} />
+      )}
+
       {/* Кнопки действий */}
       <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
         <button
@@ -342,10 +386,11 @@ export function AppointmentForm({
         </button>
         <button
           type="submit"
-          disabled={conflicts.length > 0}
+          disabled={conflicts.length > 0 && !recurringOptions.enabled}
           className="px-6 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isEditing ? 'Сохранить изменения' : 'Создать запись'}
+          {isEditing ? 'Сохранить изменения' : 
+           recurringOptions.enabled ? `Создать ${recurringOptions.count + 1} записей` : 'Создать запись'}
         </button>
       </div>
     </form>

@@ -62,7 +62,7 @@ function App() {
     const doctor = doctors.find(d => d.id === appointmentData.doctorId);
     if (doctor) {
       const newPayment: Payment = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + Math.random()).toString(),
         appointmentId: newAppointment.id,
         patientId: appointmentData.patientId,
         amount: doctor.consultationFee,
